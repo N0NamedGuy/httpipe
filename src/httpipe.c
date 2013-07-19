@@ -60,13 +60,10 @@ bool starts_with(const char *pre, const char *str)
 
 bool read_request(int connfd) {
     char* buf;
-    bool ret;
 
     buf = malloc(g_buf_size);
 
     read(connfd, buf, g_buf_size);
-
-    ret = starts_with(buf, "GET");
     
     free(buf);
     return true;
