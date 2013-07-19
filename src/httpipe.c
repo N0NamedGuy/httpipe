@@ -22,9 +22,12 @@ void set_options(int argc, char** argv) {
 int startup_server(int port) {
     int listenfd;
     struct sockaddr_in serv_addr;
-    char optval;
+    int reuseaddr_opt;
 
-    listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    listenfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    reuseaddr_opt = 1;
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_opt, sizeof reuseaddr_opt);
+
     if (!listenfd) {
         perror("Couldn't create a socket");
         return -1;
@@ -34,9 +37,6 @@ int startup_server(int port) {
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port = htons(port);
-
-    optval = 1;
-    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
 
     if ((bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))) == -1) {
         perror("Couldn't bind");
@@ -105,7 +105,6 @@ int main(int argc, char** argv) {
 
     close(connfd);
     shutdown(listenfd, SHUT_RDWR);
-    printf("The end\n");
 
     free(buf);
 
