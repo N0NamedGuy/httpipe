@@ -8,15 +8,24 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#define MAX_FILENAME 256
+
 #define DEF_BUF_SIZE 1024
 #define DEF_PORT 5000
 
 int g_buf_size;
 int g_port;
+char g_filename[MAX_FILENAME];
 
 void set_options(int argc, char** argv) {
     g_buf_size = DEF_BUF_SIZE;
     g_port = DEF_PORT;
+   
+    if (argc > 1) {
+        strncpy((char*)g_filename, argv[1], MAX_FILENAME);
+    } else {
+        strncpy((char*)g_filename, "", MAX_FILENAME); 
+    }
 }
 
 int startup_server(int port) {
@@ -86,8 +95,18 @@ int main(int argc, char** argv) {
     size_t n;
     int listenfd;
     int connfd;
+    FILE* fp;
 
     set_options(argc, argv);
+    if (strcmp(g_filename, "")) {
+        if ((fp = fopen(g_filename, "r")) == NULL) {
+            perror("File not found");
+            return 1;
+        }
+    } else {
+        fp = stdin;
+    }
+
     listenfd = startup_server(g_port);
     if (listenfd < 0) return abs(listenfd);
 
@@ -96,9 +115,12 @@ int main(int argc, char** argv) {
 
     buf = malloc(g_buf_size);
 
-    while ((n = fread(buf, 1, g_buf_size, stdin)) > 0) {
+
+    while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
         write(connfd, buf, n);
     }
+
+    fclose(fp);
 
     close(connfd);
     shutdown(listenfd, SHUT_RDWR);
