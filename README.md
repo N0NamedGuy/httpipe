@@ -20,4 +20,4 @@ Other fun commands you may do:
     httpipe <<< Hello World
     ls | httpipe
 
-If you run httpipe by itself, you may input manually the data you want to serve. To end piping data, place an EOF (by making Ctrl-D).
+If you run **httpipe** by itself, you may input manually the data you want to serve. To end piping data, place an EOF (by making Ctrl-D).
