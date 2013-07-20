@@ -68,7 +68,7 @@ void set_options(int argc, char** argv) {
     g_port = DEF_PORT;
     g_verbose = DEF_VERBOSE;
 
-    while ((c = getopt_long(argc, argv, "vf:p:h",
+    while ((c = getopt_long(argc, argv, "vf:p:m:h",
                 long_options, &option_index))) {
         if (c == -1) break;
 
