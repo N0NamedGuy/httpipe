@@ -133,6 +133,7 @@ bool read_request(int connfd) {
     char* buf;
 
     buf = malloc(g_buf_size);
+    memset((void*)buf, 0, g_buf_size);
 
     read(connfd, buf, g_buf_size);
     
@@ -154,23 +155,16 @@ int waitconn(int listenfd) {
 
 int send_headers(int connfd) {
     char* buf;
-    char* send_buf;
 
-    send_buf = malloc(g_buf_size * 2);
     buf = malloc(g_buf_size);
-
-    memset((void*)send_buf, 0, g_buf_size * 2);
     memset((void*)buf, 0, g_buf_size);
 
     snprintf((char*)buf, g_buf_size, "HTTP/1.0 %d %s\r\n", 200, "OK");
-    strncat(send_buf, buf, g_buf_size);
+    write(connfd, buf, strlen(buf));
 
     snprintf((char*)buf, g_buf_size, "Content-Type: %s\r\n\r\n", g_mime);
-    strncat(send_buf, buf, g_buf_size);
+    write(connfd, buf, strlen(buf));
 
-    write(connfd, send_buf, strlen(send_buf));
-
-    free(send_buf);
     free(buf);
     return 0;
 }
@@ -180,6 +174,7 @@ int send_file (int connfd, FILE* fp) {
     size_t n;
 
     buf = malloc(g_buf_size);
+    memset((void*)buf, 0, g_buf_size);
 
     while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
         write(connfd, buf, n);
