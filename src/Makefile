@@ -1,7 +1,7 @@
 CC=gcc
 BIN=httpipe
 SRC=httpipe.c
-CFLAGS=-Wall
+CFLAGS=-Wall -O3
 INSTALL=install
 BINDIR=/usr/local/bin
 

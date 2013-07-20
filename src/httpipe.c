@@ -39,23 +39,29 @@ void print_help(int argc, char** argv) {
     printf("Options:\n");
     printf("  -f, --file=FILE\toutputs file to HTTP. If FILE is undefined,\n");
     printf("\t\t\tinput data will be read from stdin\n");
-    printf("  -p, --port=PORT\tsets the port to which the program will listen\n");
-    printf("\t\t\tfor incoming connections. Defaults to %d\n", DEF_PORT);
-    printf("  -m, --mime=MIME\tsets the output MIME type. Defaults to %s\n", DEF_MIME);
+    printf("  -p, --port=PORT\tsets the port to which the program\n");
+    printf("\t\t\twill listen for incoming connections.\n");
+    printf("\t\t\tDefaults to %d\n", DEF_PORT);
+    printf("  -m, --mime=MIME\tsets the output MIME type.\n");
+    printf("\t\t\tDefaults to %s\n", DEF_MIME);
     printf("  -v, --verbose\t\tbe verbose (can track sending speed)\n");
-    printf("  -s, --silent\t\tbe silent (no output at all, not even errors)\n");
-    printf("  -h, --help\t\tshow this help message\n\n");
-    printf("This program is meant to be used as a pipe that goes through HTTP.\n");
-    printf("It was conceived so it could be possible to easily transfer a disk\n");
-    printf("image throught HTTP. That can be accomplished by issuing:\n\n");
-    printf("  %s < /dev/sda\n\n", argv[0]);
+    printf("  -s, --silent\t\tbe silent (no output at all)\n");
+    printf("  -h, --help\t\tshows this help message\n\n");
+    printf("This program is meant to be used as an HTTP pipe.\n");
+    printf("It was conceived so it could be possible to easily transfer\n");
+    printf("a disk image throught HTTP.\n");
+    printf("That can be accomplished by issuing:\n");
+    printf("  cat /dev/sda | gzip -9 | %s\n\n", argv[0]);
+    printf("And on the client:\n");
+    printf("  curl http://example.com/image.img.gz -O\n\n");
     printf("Please be aware that doing so in an unprotected environment,\n");
-    printf("(outside your home network for instance) is not recommended, due\n");
-    printf("to possible security issues.\n\n");
+    printf("(outside your home network for instance) is not recommended,\n");
+    printf("due to possible security issues.\n\n");
     printf("HTTPipe home page: <https://github.com/N0NamedGuy/httpipe/>\n");
     printf("Report bugs and issues in the GitHub tracker\n");
     printf("Pull requests are welcome\n");
-    printf("Original implementation by:\nDavid Serrano <david.nonamedguy@gmail.com>\n");
+    printf("Original implementation by:\n");
+    printf("David Serrano <david.nonamedguy@gmail.com>\n");
 }
 
 void set_options(int argc, char** argv) {
@@ -123,7 +129,8 @@ int startup_server(int port) {
     listenfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     /* Import lines of code, so we can avoid the TIME_WAIT limbo */
     reuseaddr_opt = 1;
-    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_opt, sizeof reuseaddr_opt);
+    setsockopt(listenfd, SOL_SOCKET,
+            SO_REUSEADDR, &reuseaddr_opt, sizeof reuseaddr_opt);
 
     if (!listenfd) {
         printerr("Couldn't create a socket");
@@ -135,7 +142,10 @@ int startup_server(int port) {
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port = htons(port);
 
-    if ((bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))) == -1) {
+    if ((bind(
+                    listenfd,
+                    (struct sockaddr*)&serv_addr,
+                    sizeof(serv_addr))) == -1) {
         printerr("Couldn't bind");
         return -2;
     }
@@ -231,13 +241,18 @@ int send_file (int connfd, FILE* fp) {
     buf = malloc(g_buf_size);
     memset((void*)buf, 0, g_buf_size);
 
+
     /* Set up the statistic variables if we are being verbose */
     if (g_verbose) {
         last = time(NULL);
         cur_total = 0;
         total = 0;
         puts("");
+    } else {
+        /* Damn gcc complaining... */
+        last = 0;
     }
+
 
     while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
         /* All the program revolves around this write */
