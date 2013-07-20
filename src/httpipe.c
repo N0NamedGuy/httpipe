@@ -197,6 +197,19 @@ int send_headers(int connfd) {
     return 0;
 }
 
+void human_readable(unsigned int bytes, char* out, const size_t str_size) {
+    static char units[] = "BKMGTPE";
+    unsigned int remainder = bytes;
+    int unit = 0;
+
+    while (remainder > 1024) {
+        remainder = remainder / 1024;
+        unit++;
+    }
+
+    snprintf(out, str_size, "%d%c", remainder, units[unit]);
+}
+
 int send_file (int connfd, FILE* fp) {
     char* buf;
     size_t n;
@@ -223,11 +236,16 @@ int send_file (int connfd, FILE* fp) {
             cur = time(NULL);
             elapsed = difftime(cur, last); 
             if (elapsed > 1.0) {
+                static char human_total[6];
+                static char human_transfer[6];
                 total += cur_total;
 
-                printverb("\033[F\033[JWritten %zu bytes (%u bytes per second)\n",
-                        total,
-                        (unsigned int)(cur_total / elapsed));
+                human_readable(total, human_total, 6);
+                human_readable(cur_total / elapsed, human_transfer, 6);
+
+                printverb("\033[F\033[JSent %s (%s per second)\n",
+                        human_total,
+                        human_transfer);
 
                 cur_total = 0;
                 last = cur;
