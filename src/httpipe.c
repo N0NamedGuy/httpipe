@@ -11,10 +11,12 @@
 #include <netinet/in.h>
 
 #define MAX_FILENAME 256
+#define MAX_MIME 256
 
 #define DEF_BUF_SIZE 1024
 #define DEF_PORT 5000
 #define DEF_VERBOSE 0
+#define DEF_MIME "application/octet-stream"
 
 #define printverb(fmt, ...) \
     do { if (g_verbose) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
@@ -23,6 +25,7 @@ int g_buf_size;
 int g_port;
 char g_filename[MAX_FILENAME];
 int g_verbose;
+char g_mime[MAX_MIME];
 
 void print_help(int argc, char** argv) {
     printf("Usage: %s [OPTIONS]\n", argv[0]);
@@ -32,6 +35,7 @@ void print_help(int argc, char** argv) {
     printf("\t\t\tinput data will be read from stdin\n");
     printf("  -p, --port=PORT\tsets the port to which the program will listen\n");
     printf("\t\t\tfor incoming connections. Defaults to %d\n", DEF_PORT);
+    printf("  -m, --mime=MIME\tsets the output MIME type. Defaults to %s\n", DEF_MIME);
     printf("  -v, --verbose\t\tbe verbose\n");
     printf("  -h, --help\t\tshow this help message\n\n");
     printf("This program is meant to be used as a pipe that goes through HTTP.\n");
@@ -54,6 +58,7 @@ void set_options(int argc, char** argv) {
         {"verbose", no_argument,        0, 'v'},
         {"file",    required_argument,  0, 'f'},
         {"port",    required_argument,  0, 'p'},
+        {"mime",    required_argument,  0, 'm'},
         {"help",    no_argument,        0, 'h'},
         {0, 0, 0, 0}
     };
@@ -71,9 +76,15 @@ void set_options(int argc, char** argv) {
             case 'f':
                 strncpy((char*)g_filename, optarg, MAX_FILENAME);
                 break;
+
             case 'p':
                 g_port = atoi(optarg);
                 break;
+
+            case 'm':
+                strncpy((char*)g_mime, optarg, MAX_MIME);
+                break;
+
             case 'v':
                 g_verbose = true;
                 break;
@@ -118,13 +129,6 @@ int startup_server(int port) {
     return listenfd;
 }
 
-bool starts_with(const char *pre, const char *str)
-{
-    size_t lenpre = strlen(pre),
-           lenstr = strlen(str);
-    return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
-}
-
 bool read_request(int connfd) {
     char* buf;
 
@@ -148,9 +152,44 @@ int waitconn(int listenfd) {
     return connfd;
 }
 
-int main(int argc, char** argv) {
+int send_headers(int connfd) {
+    char* buf;
+    char* send_buf;
+
+    send_buf = malloc(g_buf_size * 2);
+    buf = malloc(g_buf_size);
+
+    memset((void*)send_buf, 0, g_buf_size * 2);
+    memset((void*)buf, 0, g_buf_size);
+
+    snprintf((char*)buf, g_buf_size, "HTTP/1.0 %d %s\r\n", 200, "OK");
+    strncat(send_buf, buf, g_buf_size);
+
+    snprintf((char*)buf, g_buf_size, "Content-Type: %s\r\n\r\n", g_mime);
+    strncat(send_buf, buf, g_buf_size);
+
+    write(connfd, send_buf, strlen(send_buf));
+
+    free(send_buf);
+    free(buf);
+    return 0;
+}
+
+int send_file (int connfd, FILE* fp) {
     char* buf;
     size_t n;
+
+    buf = malloc(g_buf_size);
+
+    while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
+        write(connfd, buf, n);
+    }
+
+    free(buf);
+    return 0;
+}
+
+int main(int argc, char** argv) {
     int listenfd;
     int connfd;
     FILE* fp;
@@ -171,19 +210,12 @@ int main(int argc, char** argv) {
     connfd = waitconn(listenfd);
     if (connfd < 0) return abs(connfd);
 
-    buf = malloc(g_buf_size);
-
-
-    while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
-        write(connfd, buf, n);
-    }
+    send_headers(connfd);
+    send_file(connfd, fp);
 
     fclose(fp);
-
     close(connfd);
-    shutdown(listenfd, SHUT_RDWR);
-
-    free(buf);
+    close(listenfd);
 
     return 0;
 }
