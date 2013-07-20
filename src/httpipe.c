@@ -23,8 +23,8 @@
 #define printverb(fmt, ...) \
     do { if (g_verbose) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
 
-#define printerr(fmt, ...) \
-    do { if (g_verbose) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
+#define printerr(str) \
+    do { if (!g_silent) perror(str); } while (0)
 
 int g_buf_size;
 int g_port;
@@ -42,8 +42,8 @@ void print_help(int argc, char** argv) {
     printf("  -p, --port=PORT\tsets the port to which the program will listen\n");
     printf("\t\t\tfor incoming connections. Defaults to %d\n", DEF_PORT);
     printf("  -m, --mime=MIME\tsets the output MIME type. Defaults to %s\n", DEF_MIME);
-    printf("  -v, --verbose\t\tbe verbose (lots of output)\n");
-    printf("  -v, --silent\t\tbe silent (no output at all, not even errors)\n");
+    printf("  -v, --verbose\t\tbe verbose (can track sending speed)\n");
+    printf("  -s, --silent\t\tbe silent (no output at all, not even errors)\n");
     printf("  -h, --help\t\tshow this help message\n\n");
     printf("This program is meant to be used as a pipe that goes through HTTP.\n");
     printf("It was conceived so it could be possible to easily transfer a disk\n");
@@ -124,7 +124,7 @@ int startup_server(int port) {
     setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_opt, sizeof reuseaddr_opt);
 
     if (!listenfd) {
-        perror("Couldn't create a socket");
+        printerr("Couldn't create a socket");
         return -1;
     } 
 
@@ -134,12 +134,12 @@ int startup_server(int port) {
     serv_addr.sin_port = htons(port);
 
     if ((bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))) == -1) {
-        perror("Couldn't bind");
+        printerr("Couldn't bind");
         return -2;
     }
 
     if (listen(listenfd, 0) == -1) {
-        perror("Couldn't listen for incoming requests"); 
+        printerr("Couldn't listen for incoming requests"); 
         return -3;
     }
 
@@ -223,7 +223,7 @@ int send_file (int connfd, FILE* fp) {
         last = time(NULL);
         cur_total = 0;
         total = 0;
-        puts("\n");
+        puts("");
     }
 
     while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
@@ -249,7 +249,6 @@ int send_file (int connfd, FILE* fp) {
 
                 cur_total = 0;
                 last = cur;
-
             }
         }
     }
@@ -266,7 +265,7 @@ int main(int argc, char** argv) {
     set_options(argc, argv);
     if (strcmp(g_filename, "")) {
         if ((fp = fopen(g_filename, "r")) == NULL) {
-            perror("File not found");
+            printerr("File not found");
             return 1;
         }
     } else {
