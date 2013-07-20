@@ -119,7 +119,9 @@ int startup_server(int port) {
     struct sockaddr_in serv_addr;
     int reuseaddr_opt;
 
+    /* Gets hold of a socket for ourselves */
     listenfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    /* Import lines of code, so we can avoid the TIME_WAIT limbo */
     reuseaddr_opt = 1;
     setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_opt, sizeof reuseaddr_opt);
 
@@ -152,6 +154,8 @@ bool read_request(int connfd) {
     buf = malloc(g_buf_size);
     memset((void*)buf, 0, g_buf_size);
 
+    /* We just read incoming HTTP headers and such */
+    /* For now, we just don't care about anything */
     read(connfd, buf, g_buf_size);
     
     free(buf);
@@ -167,14 +171,16 @@ int waitconn(int listenfd) {
     printverb("Waiting for incoming connection on port %d\n", g_port);
     connfd = accept(listenfd, (struct sockaddr*)&other_addr, &addr_size);
 
+    /* Tell us who is connecting */ 
     if (g_verbose) {
         getpeername(connfd, (struct sockaddr*)&other_addr, &addr_size);
         inet_ntop(AF_INET, &(other_addr.sin_addr), addr, INET_ADDRSTRLEN);
         printverb("Accepting connection from %s\n", addr);
     }
 
+    /* We read the request, and act accordingly */
     if (!read_request(connfd)) {
-        fputs("Wrong request or HTTP method", stderr);
+        if (!g_silent) fputs("Wrong request or HTTP method", stderr);
         connfd = -1;
     }
 
@@ -187,9 +193,11 @@ int send_headers(int connfd) {
     buf = malloc(g_buf_size);
     memset((void*)buf, 0, g_buf_size);
 
+    /* We're dumb, so we tell we only accept HTTP/1.0 */
     snprintf((char*)buf, g_buf_size, "HTTP/1.0 %d %s\r\n", 200, "OK");
     write(connfd, buf, strlen(buf));
 
+    /* Set the MIME type to what we want it to be */
     snprintf((char*)buf, g_buf_size, "Content-Type: %s\r\n\r\n", g_mime);
     write(connfd, buf, strlen(buf));
 
@@ -197,6 +205,8 @@ int send_headers(int connfd) {
     return 0;
 }
 
+/* Creates a "human-readable" string in bytes In other words, it converts bytes
+ * to the highest order possible */
 void human_readable(unsigned int bytes, char* out, const size_t str_size) {
     static char units[] = "BKMGTPE";
     unsigned int remainder = bytes;
@@ -210,15 +220,18 @@ void human_readable(unsigned int bytes, char* out, const size_t str_size) {
     snprintf(out, str_size, "%d%c", remainder, units[unit]);
 }
 
+/* Outputs a file described by the file pointer fp thru a socket connfd */
 int send_file (int connfd, FILE* fp) {
     char* buf;
     size_t n;
     size_t total, cur_total;
     time_t last, cur;
 
+    /* Get us a nice clean buffer */
     buf = malloc(g_buf_size);
     memset((void*)buf, 0, g_buf_size);
 
+    /* Set up the statistic variables if we are being verbose */
     if (g_verbose) {
         last = time(NULL);
         cur_total = 0;
@@ -227,8 +240,10 @@ int send_file (int connfd, FILE* fp) {
     }
 
     while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
+        /* All the program revolves around this write */
         write(connfd, buf, n);
-
+    
+        /* Print statistics */
         if (g_verbose) {
             double elapsed;
             cur_total += n;
@@ -240,6 +255,8 @@ int send_file (int connfd, FILE* fp) {
                 static char human_transfer[6];
                 total += cur_total;
 
+                /* Get the total transfered bytes and the current transfer
+                 * speed in a human readable format */
                 human_readable(total, human_total, 6);
                 human_readable(cur_total / elapsed, human_transfer, 6);
 
@@ -247,6 +264,7 @@ int send_file (int connfd, FILE* fp) {
                         human_total,
                         human_transfer);
 
+                /* Reset stuff */
                 cur_total = 0;
                 last = cur;
             }
@@ -263,6 +281,9 @@ int main(int argc, char** argv) {
     FILE* fp;
 
     set_options(argc, argv);
+
+    /* Open the file early, so we may fail early.
+     * To note that if no file is specified, stdin will be read instead */
     if (strcmp(g_filename, "")) {
         if ((fp = fopen(g_filename, "r")) == NULL) {
             printerr("File not found");
@@ -272,15 +293,19 @@ int main(int argc, char** argv) {
         fp = stdin;
     }
 
+    /* Start listening */
     listenfd = startup_server(g_port);
     if (listenfd < 0) return abs(listenfd);
 
+    /* Start waiting for connections */
     connfd = waitconn(listenfd);
     if (connfd < 0) return abs(connfd);
 
+    /* Send stuff */
     send_headers(connfd);
     send_file(connfd, fp);
 
+    /* Cleanup */
     fclose(fp);
     close(connfd);
     close(listenfd);
