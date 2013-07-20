@@ -14,7 +14,7 @@
 #define MAX_FILENAME 256
 #define MAX_MIME 256
 
-#define DEF_BUF_SIZE 1024
+#define DEF_BUF_SIZE 1024*1024
 #define DEF_PORT 5000
 #define DEF_VERBOSE false
 #define DEF_SILENT false
