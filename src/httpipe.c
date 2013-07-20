@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 
 #include <getopt.h>
 
@@ -15,16 +16,21 @@
 
 #define DEF_BUF_SIZE 1024
 #define DEF_PORT 5000
-#define DEF_VERBOSE 0
+#define DEF_VERBOSE false
+#define DEF_SILENT false
 #define DEF_MIME "application/octet-stream"
 
 #define printverb(fmt, ...) \
     do { if (g_verbose) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
 
+#define printerr(fmt, ...) \
+    do { if (g_verbose) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
+
 int g_buf_size;
 int g_port;
 char g_filename[MAX_FILENAME];
-int g_verbose;
+bool g_verbose;
+bool g_silent;
 char g_mime[MAX_MIME];
 
 void print_help(int argc, char** argv) {
@@ -36,7 +42,8 @@ void print_help(int argc, char** argv) {
     printf("  -p, --port=PORT\tsets the port to which the program will listen\n");
     printf("\t\t\tfor incoming connections. Defaults to %d\n", DEF_PORT);
     printf("  -m, --mime=MIME\tsets the output MIME type. Defaults to %s\n", DEF_MIME);
-    printf("  -v, --verbose\t\tbe verbose\n");
+    printf("  -v, --verbose\t\tbe verbose (lots of output)\n");
+    printf("  -v, --silent\t\tbe silent (no output at all, not even errors)\n");
     printf("  -h, --help\t\tshow this help message\n\n");
     printf("This program is meant to be used as a pipe that goes through HTTP.\n");
     printf("It was conceived so it could be possible to easily transfer a disk\n");
@@ -56,6 +63,7 @@ void set_options(int argc, char** argv) {
 
     static struct option long_options[] = {
         {"verbose", no_argument,        0, 'v'},
+        {"silent",  no_argument,        0, 's'},
         {"file",    required_argument,  0, 'f'},
         {"port",    required_argument,  0, 'p'},
         {"mime",    required_argument,  0, 'm'},
@@ -68,7 +76,7 @@ void set_options(int argc, char** argv) {
     g_port = DEF_PORT;
     g_verbose = DEF_VERBOSE;
 
-    while ((c = getopt_long(argc, argv, "vf:p:m:h",
+    while ((c = getopt_long(argc, argv, "vsf:p:m:h",
                 long_options, &option_index))) {
         if (c == -1) break;
 
@@ -88,12 +96,21 @@ void set_options(int argc, char** argv) {
             case 'v':
                 g_verbose = true;
                 break;
+            
+            case 's':
+                g_silent = true;
+                break;
 
             case 'h':
                 print_help(argc, argv);
                 exit(0);
                 break;
         }
+    }
+
+    if (g_silent && g_verbose) {
+        printverb("%s\n", "Can't be silent and verbose at the same time.");
+        exit(1);
     }
 }
 
@@ -143,7 +160,18 @@ bool read_request(int connfd) {
 
 int waitconn(int listenfd) {
     int connfd;
-    connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
+    struct sockaddr_in other_addr;
+    static char addr[INET_ADDRSTRLEN];
+    socklen_t addr_size;
+
+    printverb("Waiting for incoming connection on port %d\n", g_port);
+    connfd = accept(listenfd, (struct sockaddr*)&other_addr, &addr_size);
+
+    if (g_verbose) {
+        getpeername(connfd, (struct sockaddr*)&other_addr, &addr_size);
+        inet_ntop(AF_INET, &(other_addr.sin_addr), addr, INET_ADDRSTRLEN);
+        printverb("Accepting connection from %s\n", addr);
+    }
 
     if (!read_request(connfd)) {
         fputs("Wrong request or HTTP method", stderr);
@@ -172,12 +200,40 @@ int send_headers(int connfd) {
 int send_file (int connfd, FILE* fp) {
     char* buf;
     size_t n;
+    size_t total, cur_total;
+    time_t last, cur;
 
     buf = malloc(g_buf_size);
     memset((void*)buf, 0, g_buf_size);
 
+    if (g_verbose) {
+        last = time(NULL);
+        cur_total = 0;
+        total = 0;
+        puts("\n");
+    }
+
     while ((n = fread(buf, 1, g_buf_size, fp)) > 0) {
         write(connfd, buf, n);
+
+        if (g_verbose) {
+            double elapsed;
+            cur_total += n;
+
+            cur = time(NULL);
+            elapsed = difftime(cur, last); 
+            if (elapsed > 1.0) {
+                total += cur_total;
+
+                printverb("\033[F\033[JWritten %zu bytes (%u bytes per second)\n",
+                        total,
+                        (unsigned int)(cur_total / elapsed));
+
+                cur_total = 0;
+                last = cur;
+
+            }
+        }
     }
 
     free(buf);
