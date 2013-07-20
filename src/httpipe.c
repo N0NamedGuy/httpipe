@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <getopt.h>
+
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -12,19 +14,75 @@
 
 #define DEF_BUF_SIZE 1024
 #define DEF_PORT 5000
+#define DEF_VERBOSE 0
+
+#define printverb(fmt, ...) \
+    do { if (g_verbose) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
 
 int g_buf_size;
 int g_port;
 char g_filename[MAX_FILENAME];
+int g_verbose;
+
+void print_help(int argc, char** argv) {
+    printf("Usage: %s [OPTIONS]\n", argv[0]);
+    printf("Outputs given input to HTTP\n\n");
+    printf("Options:\n");
+    printf("  -f, --file=FILE\toutputs file to HTTP. If FILE is undefined,\n");
+    printf("\t\t\tinput data will be read from stdin\n");
+    printf("  -p, --port=PORT\tsets the port to which the program will listen\n");
+    printf("\t\t\tfor incoming connections. Defaults to %d\n", DEF_PORT);
+    printf("  -v, --verbose\t\tbe verbose\n");
+    printf("  -h, --help\t\tshow this help message\n\n");
+    printf("This program is meant to be used as a pipe that goes through HTTP.\n");
+    printf("It was conceived so it could be possible to easily transfer a disk\n");
+    printf("image throught HTTP. That can be accomplished by issuing:\n\n");
+    printf("  %s < /dev/sda\n\n", argv[0]);
+    printf("Please be aware that doing so in an unprotected environment,\n");
+    printf("(outside your home network for instance) is not recommended, due\n");
+    printf("to possible security issues.\n\n");
+    printf("HTTPipe home page: <https://github.com/N0NamedGuy/httpipe/>\n");
+    printf("Report bugs and issues in the GitHub tracker\n");
+    printf("Pull requests are welcome\n");
+    printf("Original implementation by:\nDavid Serrano <david.nonamedguy@gmail.com>\n");
+}
 
 void set_options(int argc, char** argv) {
+    int c;
+
+    static struct option long_options[] = {
+        {"verbose", no_argument,        0, 'v'},
+        {"file",    required_argument,  0, 'f'},
+        {"port",    required_argument,  0, 'p'},
+        {"help",    no_argument,        0, 'h'},
+        {0, 0, 0, 0}
+    };
+    int option_index = 0;
+
     g_buf_size = DEF_BUF_SIZE;
     g_port = DEF_PORT;
-   
-    if (argc > 1) {
-        strncpy((char*)g_filename, argv[1], MAX_FILENAME);
-    } else {
-        strncpy((char*)g_filename, "", MAX_FILENAME); 
+    g_verbose = DEF_VERBOSE;
+
+    while ((c = getopt_long(argc, argv, "vf:p:h",
+                long_options, &option_index))) {
+        if (c == -1) break;
+
+        switch (c) {
+            case 'f':
+                strncpy((char*)g_filename, optarg, MAX_FILENAME);
+                break;
+            case 'p':
+                g_port = atoi(optarg);
+                break;
+            case 'v':
+                g_verbose = true;
+                break;
+
+            case 'h':
+                print_help(argc, argv);
+                exit(0);
+                break;
+        }
     }
 }
 
